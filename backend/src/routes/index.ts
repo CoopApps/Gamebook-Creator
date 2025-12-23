@@ -3,6 +3,7 @@ import authRoutes from './auth.routes';
 import projectsRoutes from './projects.routes';
 import nodesRoutes from './nodes.routes';
 import connectionsRoutes from './connections.routes';
+import progressRoutes from './progress.routes';
 
 const router = Router();
 
@@ -21,6 +22,9 @@ router.use('/nodes', nodesRoutes);
 
 // Connections routes
 router.use('/connections', connectionsRoutes);
+
+// Progress systems routes
+router.use('/progress', progressRoutes);
 
 // Health check
 router.get('/health', (req, res) => {
@@ -42,6 +46,7 @@ router.get('/', (req, res) => {
       projects: '/api/projects',
       nodes: '/api/nodes',
       connections: '/api/connections',
+      progress: '/api/progress',
       health: '/api/health',
     },
   });
