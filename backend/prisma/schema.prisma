@@ -1,0 +1,227 @@
+// Gamebook Creator - Database Schema
+// PostgreSQL with Prisma ORM
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================================
+// USERS & AUTHENTICATION
+// ============================================================================
+
+model User {
+  id            String    @id @default(uuid())
+  email         String    @unique
+  username      String    @unique
+  passwordHash  String?   @map("password_hash")
+  oauthProvider String?   @map("oauth_provider") // google, github
+  oauthId       String?   @map("oauth_id")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  // Relations
+  projects      Project[] @relation("ProjectOwner")
+  collaborations ProjectCollaborator[]
+  exports       Export[]
+  events        ProjectEvent[]
+
+  @@index([email])
+  @@index([username])
+  @@map("users")
+}
+
+// ============================================================================
+// PROJECTS
+// ============================================================================
+
+model Project {
+  id              String    @id @default(uuid())
+  userId          String    @map("user_id")
+  title           String
+  description     String?   @db.Text
+  thumbnailUrl    String?   @map("thumbnail_url")
+  isPublic        Boolean   @default(false) @map("is_public")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+  lastAccessed    DateTime  @default(now()) @map("last_accessed")
+  deletedAt       DateTime? @map("deleted_at")
+
+  // Relations
+  owner           User      @relation("ProjectOwner", fields: [userId], references: [id], onDelete: Cascade)
+  nodes           Node[]
+  connections     Connection[]
+  progressSystems ProgressSystem[]
+  collaborators   ProjectCollaborator[]
+  exports         Export[]
+  events          ProjectEvent[]
+
+  @@index([userId, lastAccessed(sort: Desc)])
+  @@index([isPublic, createdAt(sort: Desc)])
+  @@index([deletedAt])
+  @@map("projects")
+}
+
+// ============================================================================
+// NODES & STORY
+// ============================================================================
+
+model Node {
+  id          String    @id @default(uuid())
+  projectId   String    @map("project_id")
+  nodeNumber  Int       @map("node_number")
+  nodeType    String    @map("node_type") // start, story, choice, conditional, combat, web-mark, success, game-over, inventory
+  title       String?
+  content     String?   @db.Text
+  positionX   Float     @map("position_x")
+  positionY   Float     @map("position_y")
+  properties  Json?     // Flexible storage for node-specific properties
+  version     Int       @default(1) // For optimistic locking
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+  deletedAt   DateTime? @map("deleted_at")
+
+  // Relations
+  project         Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  segments        StorySegment[]
+  connectionsFrom Connection[]    @relation("ConnectionFrom")
+  connectionsTo   Connection[]    @relation("ConnectionTo")
+
+  @@unique([projectId, nodeNumber])
+  @@index([projectId])
+  @@index([nodeType])
+  @@index([deletedAt])
+  @@map("nodes")
+}
+
+// Story Segments - Multiple stories per action node
+model StorySegment {
+  id            String   @id @default(uuid())
+  nodeId        String   @map("node_id")
+  segmentNumber Int      @map("segment_number")
+  content       String   @db.Text
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  // Relations
+  node Node @relation(fields: [nodeId], references: [id], onDelete: Cascade)
+
+  @@unique([nodeId, segmentNumber])
+  @@index([nodeId])
+  @@map("story_segments")
+}
+
+// ============================================================================
+// CONNECTIONS
+// ============================================================================
+
+model Connection {
+  id             String   @id @default(uuid())
+  projectId      String   @map("project_id")
+  fromNodeId     String   @map("from_node_id")
+  toNodeId       String   @map("to_node_id")
+  connectionType String   @map("connection_type") // normal, conditional, backward, combat
+  conditionText  String?  @map("condition_text") @db.Text
+  choiceText     String?  @map("choice_text")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  // Relations
+  project  Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  fromNode Node    @relation("ConnectionFrom", fields: [fromNodeId], references: [id], onDelete: Cascade)
+  toNode   Node    @relation("ConnectionTo", fields: [toNodeId], references: [id], onDelete: Cascade)
+
+  @@unique([fromNodeId, toNodeId, connectionType])
+  @@index([projectId])
+  @@index([fromNodeId])
+  @@index([toNodeId])
+  @@map("connections")
+}
+
+// ============================================================================
+// PROGRESS SYSTEMS
+// ============================================================================
+
+model ProgressSystem {
+  id            String   @id @default(uuid())
+  projectId     String   @map("project_id")
+  systemType    String   @map("system_type") // web, skills, inventory, relationships
+  systemName    String   @map("system_name")
+  configuration Json     // System-specific configuration
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  // Relations
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+  @@map("progress_systems")
+}
+
+// ============================================================================
+// COLLABORATION
+// ============================================================================
+
+model ProjectCollaborator {
+  id         String    @id @default(uuid())
+  projectId  String    @map("project_id")
+  userId     String    @map("user_id")
+  role       String    // owner, editor, viewer
+  invitedAt  DateTime  @default(now()) @map("invited_at")
+  acceptedAt DateTime? @map("accepted_at")
+
+  // Relations
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, userId])
+  @@index([userId])
+  @@map("project_collaborators")
+}
+
+// ============================================================================
+// EXPORTS
+// ============================================================================
+
+model Export {
+  id           String    @id @default(uuid())
+  projectId    String    @map("project_id")
+  userId       String    @map("user_id")
+  exportFormat String    @map("export_format") // ios, android, web, pdf, json, inform7
+  status       String    // pending, processing, completed, failed
+  fileUrl      String?   @map("file_url")
+  errorMessage String?   @map("error_message") @db.Text
+  createdAt    DateTime  @default(now()) @map("created_at")
+  completedAt  DateTime? @map("completed_at")
+
+  // Relations
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([status])
+  @@index([projectId])
+  @@index([userId])
+  @@map("exports")
+}
+
+// ============================================================================
+// AUDIT & EVENTS
+// ============================================================================
+
+model ProjectEvent {
+  id        String   @id @default(uuid())
+  projectId String   @map("project_id")
+  userId    String   @map("user_id")
+  eventType String   @map("event_type") // node.created, node.updated, connection.created, etc.
+  eventData Json     @map("event_data")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  // Relations
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, createdAt(sort: Desc)])
+  @@index([userId])
+  @@map("project_events")
+}
