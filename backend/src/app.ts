@@ -4,6 +4,7 @@ import helmet from 'helmet';
 import compression from 'compression';
 import morgan from 'morgan';
 import logger from './utils/logger';
+import routes from './routes';
 
 // Create Express app
 export const app: Express = express();
@@ -62,13 +63,14 @@ app.get('/', (req, res) => {
     endpoints: {
       health: '/health',
       api: '/api',
-      docs: '/api-docs',
+      auth: '/api/auth',
+      docs: '/api-docs (coming soon)',
     },
   });
 });
 
-// API routes (to be added)
-// app.use('/api', routes);
+// API routes
+app.use('/api', routes);
 
 // ============================================================================
 // ERROR HANDLING
@@ -99,6 +101,7 @@ app.use((err: any, req: express.Request, res: express.Response, next: express.Ne
     success: false,
     error: err.name || 'Error',
     message,
+    ...(err.errors && { errors: err.errors }), // For validation errors
     ...(process.env.NODE_ENV === 'development' && { stack: err.stack }),
   });
 });
