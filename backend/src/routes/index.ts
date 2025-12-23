@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import authRoutes from './auth.routes';
+import projectsRoutes from './projects.routes';
 
 const router = Router();
 
@@ -9,6 +10,9 @@ const router = Router();
 
 // Authentication routes
 router.use('/auth', authRoutes);
+
+// Projects routes
+router.use('/projects', projectsRoutes);
 
 // Health check
 router.get('/health', (req, res) => {
@@ -27,7 +31,9 @@ router.get('/', (req, res) => {
     description: 'Backend API for Interactive Gamebook Creator',
     endpoints: {
       auth: '/api/auth',
-      projects: '/api/projects (coming soon)',
+      projects: '/api/projects',
+      nodes: '/api/nodes (coming soon)',
+      connections: '/api/connections (coming soon)',
       health: '/api/health',
     },
   });
